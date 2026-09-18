@@ -5,7 +5,6 @@ from fastapi import Cookie, HTTPException, status
 
 from . import session_store
 from .config import get_settings
-from .datasul_client import DatasulAuthClient, DatasulAuthError
 
 
 async def get_current_session(
@@ -13,9 +12,13 @@ async def get_current_session(
 ) -> dict:
     """Garante que existe uma sessão válida (usuário autenticado no Datasul).
 
-    Renova automaticamente o token junto ao TOTVS Datasul caso esteja
-    expirado e exista um refresh_token disponível.
+    Este ambiente autentica via cookie de sessão (JSESSIONID), não via
+    Bearer/JWT com refresh_token. Por isso, quando a sessão expira, não há
+    como renová-la silenciosamente: é necessário pedir um novo login ao
+    usuário.
     """
+    settings = get_settings()
+
     if not datasul_session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado.")
 
@@ -23,24 +26,11 @@ async def get_current_session(
     if not session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão inválida ou expirada.")
 
-    token = session["token"]
-    if token.is_expired():
-        if not token.refresh_token:
-            session_store.delete_session(datasul_session)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Sessão expirada. Faça login novamente.",
-            )
-        try:
-            client = DatasulAuthClient(get_settings())
-            new_token = await client.refresh(token.refresh_token)
-        except DatasulAuthError:
-            session_store.delete_session(datasul_session)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Não foi possível renovar a sessão. Faça login novamente.",
-            )
-        session_store.update_token(datasul_session, new_token)
-        session["token"] = new_token
+    if session["datasul_session"].is_expired(settings.SESSION_TTL_SECONDS):
+        session_store.delete_session(datasul_session)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão expirada. Faça login novamente.",
+        )
 
     return session

@@ -19,7 +19,6 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     ok: bool
     username: str
-    expires_in: int
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -30,7 +29,7 @@ async def login(
 ):
     client = DatasulAuthClient(settings)
     try:
-        token = await client.login_with_password(payload.username, payload.password)
+        datasul_session = await client.login(payload.username, payload.password)
     except DatasulAuthError as exc:
         return Response(
             content=_error_json(exc.message),
@@ -38,7 +37,7 @@ async def login(
             status_code=exc.status_code if exc.status_code in (401, 502) else 401,
         )
 
-    session_id = session_store.create_session(payload.username, token)
+    session_id = session_store.create_session(payload.username, datasul_session)
 
     response.set_cookie(
         key=settings.SECRET_COOKIE_NAME,
@@ -49,7 +48,7 @@ async def login(
         max_age=settings.SESSION_TTL_SECONDS,
         path="/",
     )
-    return LoginResponse(ok=True, username=payload.username, expires_in=token.expires_in)
+    return LoginResponse(ok=True, username=payload.username)
 
 
 @router.post("/logout")
@@ -66,18 +65,11 @@ async def logout(
 
 @router.get("/me")
 async def me(session: dict = Depends(get_current_session)):
-    token = session["token"]
-    claims = token.raw_claims or {}
+    ds_session = session["datasul_session"]
     return {
         "username": session["username"],
-        "token_type": token.token_type,
-        "expires_at": token.expires_at,
-        "claims": {
-            # Repassamos só um subconjunto simples/seguro das claims do JWT
-            k: v
-            for k, v in claims.items()
-            if k in ("sub", "name", "preferred_username", "email", "exp", "iss", "aud")
-        },
+        "authenticated_at": ds_session.obtained_at,
+        "has_jsessionid": "JSESSIONID" in ds_session.cookies,
     }
 
 

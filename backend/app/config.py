@@ -1,8 +1,29 @@
 """
 Configurações da aplicação, lidas de variáveis de ambiente (.env).
 
-Todas as configurações específicas do ambiente TOTVS Datasul do cliente
-(hosts, client_id/secret, grant type, etc.) ficam centralizadas aqui.
+IMPORTANTE (descoberto via inspeção do fluxo real de login no ambiente
+TOTVS Varejo - Linha Datasul 06.9, servidor erp-chile-desenv):
+
+Este ambiente NÃO usa o fluxo OAuth2 "Resource Owner Password Credentials"
+descrito genericamente na documentação da TOTVS (endpoint
+/totvs-login/connect/token). Em vez disso, o "totvs-login" usa um login
+clássico baseado em formulário (Spring Security), com:
+
+  - GET  /totvs-login/loginForm   -> retorna a página HTML de login e cria
+                                      uma sessão anônima (cookie JSESSIONID),
+                                      contendo um token _csrf embutido no HTML.
+  - POST /totvs-login/ACS?login   -> envia j_username, j_password, _csrf,
+                                      j_domain e chosenLang. Em caso de
+                                      sucesso, responde 302 e troca o
+                                      JSESSIONID por um novo, autenticado.
+  - Em seguida, o navegador segue uma cadeia de redirects
+    (login?back_to=... -> totvs-menu/?ticket=...) até chegar autenticado
+    no totvs-menu.
+
+Ou seja: a "credencial" que o portal precisa guardar por usuário não é um
+Bearer/JWT, e sim o cookie de sessão (JSESSIONID) obtido ao final desse
+fluxo. Esse cookie deve ser reenviado nas chamadas seguintes às APIs
+Progress 4GL, da mesma forma que um navegador faria.
 """
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,30 +37,32 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"          # development | production
     SECRET_COOKIE_NAME: str = "datasul_session"
     COOKIE_SECURE: bool = False           # True em produção (HTTPS obrigatório)
-    SESSION_TTL_SECONDS: int = 3600       # tempo de vida da sessão local (fallback)
+    SESSION_TTL_SECONDS: int = 1800       # tempo de vida assumido da sessão Datasul (JSESSIONID)
 
-    # --- TOTVS Datasul / OAuth2 (totvs-login) ---
-    # Host base do ambiente Datasul (ex: https://erp-desenv.renner.com.br)
+    # --- TOTVS Datasul (login por formulário / Spring Security) ---
+    # Host base do ambiente Datasul (ex: https://erp-chile-desenv.renner.com.br)
     DATASUL_BASE_URL: str = "https://SEU-HOST-DATASUL"
-    # Caminho do endpoint de token do totvs-login (IdentityServer / OAuth2)
-    DATASUL_TOKEN_PATH: str = "/totvs-login/connect/token"
-    # Grant type utilizado para o login do usuário no portal:
-    #   "password"           -> Resource Owner Password Credentials (login usuário/senha)
-    #   "client_credentials"  -> machine-to-machine (sem usuário, usado por integrações)
-    DATASUL_GRANT_TYPE: str = "password"
-    DATASUL_CLIENT_ID: str = ""
-    DATASUL_CLIENT_SECRET: str = ""
-    DATASUL_SCOPE: str = ""
-    # Empresa/estabelecimento padrão (muitos endpoints Datasul exigem contexto de empresa)
-    DATASUL_COMPANY: str = ""
+    DATASUL_LOGIN_FORM_PATH: str = "/totvs-login/loginForm"
+    DATASUL_LOGIN_ACTION_PATH: str = "/totvs-login/ACS?login"
+    # Domínio de autenticação (fixo neste ambiente: RHSA)
+    DATASUL_DOMAIN: str = "RHSA"
+    DATASUL_LANG: str = "pt"
+    # Máximo de redirects a seguir manualmente após o login, até considerar
+    # a sessão estabelecida.
+    DATASUL_MAX_REDIRECTS: int = 10
+
     # Verificação de certificado TLS (deixe True em produção)
     DATASUL_VERIFY_SSL: bool = True
     # Timeout (segundos) para chamadas ao TOTVS Datasul
     DATASUL_TIMEOUT: float = 15.0
 
     @property
-    def token_url(self) -> str:
-        return f"{self.DATASUL_BASE_URL.rstrip('/')}{self.DATASUL_TOKEN_PATH}"
+    def login_form_url(self) -> str:
+        return f"{self.DATASUL_BASE_URL.rstrip('/')}{self.DATASUL_LOGIN_FORM_PATH}"
+
+    @property
+    def login_action_url(self) -> str:
+        return f"{self.DATASUL_BASE_URL.rstrip('/')}{self.DATASUL_LOGIN_ACTION_PATH}"
 
 
 @lru_cache

@@ -1,38 +1,45 @@
 """
-Cliente OAuth2 para o serviço de autenticação do TOTVS Datasul (totvs-login).
+Cliente de autenticação para o TOTVS Datasul (totvs-login), baseado no
+fluxo REAL observado neste ambiente (TOTVS Varejo - Linha Datasul 06.9):
+login por formulário Spring Security com proteção CSRF, e não o fluxo
+OAuth2 genérico documentado publicamente pela TOTVS.
 
-Baseado no fluxo documentado pela TOTVS (TDN - "OAuth2", Linha Datasul):
-https://tdn.totvs.com/display/LDT/OAuth2
+Fluxo implementado:
+  1. GET  DATASUL_LOGIN_FORM_PATH   -> obtém uma sessão anônima (cookie) e
+                                        extrai o token _csrf embutido no HTML.
+  2. POST DATASUL_LOGIN_ACTION_PATH -> envia usuário/senha + _csrf + domínio.
+                                        Se as credenciais forem válidas, o
+                                        servidor responde com um redirect
+                                        (302/303) e troca o cookie de sessão
+                                        por um já autenticado.
+  3. Segue manualmente a cadeia de redirects (login?back_to=... ->
+     totvs-menu/?ticket=...) até não haver mais redirect, confirmando que a
+     sessão ficou autenticada.
 
-O serviço "totvs-login" expõe um endpoint de token (padrão OAuth2 /
-IdentityServer). Dois grant types são suportados pelo produto:
-
-    * client_credentials -> integrações machine-to-machine (sem usuário)
-    * password            -> Resource Owner Password Credentials, usado quando
-                              uma aplicação (como este portal) coleta usuário e
-                              senha para autenticar uma pessoa real.
-
-Este módulo isola toda a comunicação HTTP com o TOTVS Datasul, para que o
-restante da aplicação (rotas, sessão) não precise conhecer os detalhes do
-protocolo. Quando novas APIs Progress 4GL forem consumidas futuramente, este
-é o cliente que deve ser reaproveitado para anexar o Bearer token nas
-chamadas.
+O resultado guardado por usuário não é um Bearer token, e sim os cookies de
+sessão (principalmente JSESSIONID) que devem ser reenviados em toda chamada
+futura às APIs/telas do Datasul, exatamente como um navegador faria.
 """
 from __future__ import annotations
 
-import base64
-import json
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import httpx
 
 from .config import Settings
 
+_CSRF_PATTERNS = [
+    re.compile(r'name=["\']_csrf["\']\s+value=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'value=["\']([^"\']+)["\']\s+name=["\']_csrf["\']', re.IGNORECASE),
+    re.compile(r'<meta\s+name=["\']_csrf["\']\s+content=["\']([^"\']+)["\']', re.IGNORECASE),
+]
+
 
 class DatasulAuthError(Exception):
-    """Erro ao autenticar ou renovar token junto ao TOTVS Datasul."""
+    """Erro ao autenticar junto ao TOTVS Datasul."""
 
     def __init__(self, message: str, status_code: int = 401, details: Optional[Any] = None):
         super().__init__(message)
@@ -42,126 +49,110 @@ class DatasulAuthError(Exception):
 
 
 @dataclass
-class TokenResponse:
-    access_token: str
-    refresh_token: Optional[str]
-    token_type: str
-    expires_in: int
-    obtained_at: float
-    raw_claims: dict
+class DatasulSession:
+    """Sessão autenticada no TOTVS Datasul: guarda os cookies obtidos ao
+    final do fluxo de login (não um Bearer/JWT)."""
 
-    @property
-    def expires_at(self) -> float:
-        return self.obtained_at + self.expires_in
+    cookies: dict = field(default_factory=dict)
+    obtained_at: float = field(default_factory=time.time)
 
-    def is_expired(self, skew_seconds: int = 30) -> bool:
-        return time.time() >= (self.expires_at - skew_seconds)
+    def is_expired(self, ttl_seconds: int) -> bool:
+        return time.time() >= (self.obtained_at + ttl_seconds)
+
+    def as_cookie_header(self) -> dict:
+        """Retorna os cookies no formato aceito por httpx (dict simples)."""
+        return dict(self.cookies)
 
 
-def _decode_jwt_claims(token: str) -> dict:
-    """Decodifica (sem validar assinatura) o payload de um JWT apenas para
-    exibição de informações do usuário autenticado (ex.: nome, expiração).
-
-    A validação de assinatura/integridade é responsabilidade do próprio
-    TOTVS Datasul: o token só chega até aqui porque já foi emitido por ele
-    através de uma chamada HTTPS direta e confiável ao totvs-login.
-    """
-    try:
-        payload_segment = token.split(".")[1]
-        padding = "=" * (-len(payload_segment) % 4)
-        decoded = base64.urlsafe_b64decode(payload_segment + padding)
-        return json.loads(decoded)
-    except Exception:
-        return {}
+def _extract_csrf(html: str) -> Optional[str]:
+    for pattern in _CSRF_PATTERNS:
+        match = pattern.search(html)
+        if match:
+            return match.group(1)
+    return None
 
 
 class DatasulAuthClient:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    async def _post_token(self, data: dict) -> TokenResponse:
+    async def login(self, username: str, password: str) -> DatasulSession:
         settings = self.settings
+
         async with httpx.AsyncClient(
-            timeout=settings.DATASUL_TIMEOUT, verify=settings.DATASUL_VERIFY_SSL
+            timeout=settings.DATASUL_TIMEOUT,
+            verify=settings.DATASUL_VERIFY_SSL,
+            follow_redirects=False,
         ) as client:
+            # 1) Página de login: cria sessão anônima + expõe o token _csrf
             try:
-                response = await client.post(
-                    settings.token_url,
-                    data=data,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                )
+                form_resp = await client.get(settings.login_form_url)
             except httpx.RequestError as exc:
                 raise DatasulAuthError(
-                    f"Falha de comunicação com o TOTVS Datasul ({settings.token_url}): {exc}",
+                    f"Falha de comunicação com o TOTVS Datasul ({settings.login_form_url}): {exc}",
                     status_code=502,
                 ) from exc
 
-        if response.status_code != 200:
-            raise DatasulAuthError(
-                "Usuário ou senha inválidos, ou credenciais de aplicação (client_id/secret) incorretas.",
-                status_code=401,
-                details=_safe_body(response),
-            )
+            csrf_token = _extract_csrf(form_resp.text)
+            if not csrf_token:
+                raise DatasulAuthError(
+                    "Não foi possível localizar o token _csrf na página de login do Datasul. "
+                    "A versão/tela pode ter mudado.",
+                    status_code=502,
+                )
 
-        payload = response.json()
-        access_token = payload.get("access_token")
-        if not access_token:
-            raise DatasulAuthError(
-                "O TOTVS Datasul não retornou um access_token válido.",
-                status_code=502,
-                details=payload,
-            )
+            # 2) Submete usuário/senha (mesmos campos observados no navegador)
+            data = {
+                "j_username": username,
+                "j_password": password,
+                "_csrf": csrf_token,
+                "j_domain": settings.DATASUL_DOMAIN,
+                "chosenLang": settings.DATASUL_LANG,
+            }
+            try:
+                login_resp = await client.post(settings.login_action_url, data=data)
+            except httpx.RequestError as exc:
+                raise DatasulAuthError(
+                    f"Falha de comunicação com o TOTVS Datasul ({settings.login_action_url}): {exc}",
+                    status_code=502,
+                ) from exc
 
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=payload.get("refresh_token"),
-            token_type=payload.get("token_type", "Bearer"),
-            expires_in=int(payload.get("expires_in", 3600)),
-            obtained_at=time.time(),
-            raw_claims=_decode_jwt_claims(access_token),
-        )
+            if login_resp.status_code not in (302, 303):
+                raise DatasulAuthError(
+                    "Usuário ou senha inválidos.",
+                    status_code=401,
+                    details=login_resp.text[:300],
+                )
 
-    async def login_with_password(self, username: str, password: str) -> TokenResponse:
-        """Autentica um usuário real (Resource Owner Password Credentials)."""
-        settings = self.settings
-        data = {
-            "grant_type": "password",
-            "username": username,
-            "password": password,
-            "client_id": settings.DATASUL_CLIENT_ID,
-            "client_secret": settings.DATASUL_CLIENT_SECRET,
-        }
-        if settings.DATASUL_SCOPE:
-            data["scope"] = settings.DATASUL_SCOPE
-        if settings.DATASUL_COMPANY:
-            data["company"] = settings.DATASUL_COMPANY
-        return await self._post_token(data)
+            # 3) Segue a cadeia de redirects manualmente (login?back_to=... ->
+            #    totvs-menu/?ticket=...) até estabilizar a sessão autenticada.
+            location = login_resp.headers.get("location")
+            hops = 0
+            while location and hops < settings.DATASUL_MAX_REDIRECTS:
+                next_url = location if location.startswith("http") else (
+                    f"{settings.DATASUL_BASE_URL.rstrip('/')}{location}"
+                    if location.startswith("/")
+                    else f"{settings.DATASUL_BASE_URL.rstrip('/')}/{location}"
+                )
+                try:
+                    hop_resp = await client.get(next_url)
+                except httpx.RequestError as exc:
+                    raise DatasulAuthError(
+                        f"Falha ao seguir redirecionamento do Datasul ({next_url}): {exc}",
+                        status_code=502,
+                    ) from exc
 
-    async def login_with_client_credentials(self) -> TokenResponse:
-        """Autentica a própria aplicação (machine-to-machine), sem usuário."""
-        settings = self.settings
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": settings.DATASUL_CLIENT_ID,
-            "client_secret": settings.DATASUL_CLIENT_SECRET,
-        }
-        if settings.DATASUL_SCOPE:
-            data["scope"] = settings.DATASUL_SCOPE
-        return await self._post_token(data)
+                if hop_resp.status_code not in (301, 302, 303, 307, 308):
+                    break
+                location = hop_resp.headers.get("location")
+                hops += 1
 
-    async def refresh(self, refresh_token: str) -> TokenResponse:
-        settings = self.settings
-        data = {
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "client_id": settings.DATASUL_CLIENT_ID,
-            "client_secret": settings.DATASUL_CLIENT_SECRET,
-        }
-        return await self._post_token(data)
+            cookies = dict(client.cookies)
+            if "JSESSIONID" not in cookies:
+                raise DatasulAuthError(
+                    "Login não retornou uma sessão válida (JSESSIONID ausente). "
+                    "Verifique usuário, senha e domínio.",
+                    status_code=401,
+                )
 
-
-def _safe_body(response: httpx.Response):
-    try:
-        return response.json()
-    except Exception:
-        return response.text[:500]
+            return DatasulSession(cookies=cookies)

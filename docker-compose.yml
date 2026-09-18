@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   portal_app:
     build: .
@@ -16,5 +14,3 @@ services:
 networks:
   proxy_net:
     external: true
-    # Rede já criada pelo docker-compose do nginx_proxy em /srv/proxy.
-    # Confirme o nome exato com: docker network ls | grep proxy

@@ -5,16 +5,23 @@ login por formulário Spring Security com proteção CSRF, e não o fluxo
 OAuth2 genérico documentado publicamente pela TOTVS.
 
 Fluxo implementado:
-  1. GET  DATASUL_LOGIN_FORM_PATH   -> obtém uma sessão anônima (cookie) e
-                                        extrai o token _csrf embutido no HTML.
+  1. GET  DATASUL_LOGIN_FORM_PATH   -> pode envolver redirects internos até
+                                        chegar na página HTML de login real,
+                                        que contém o token _csrf embutido.
+                                        Usamos follow_redirects=True para
+                                        garantir que pousamos na página
+                                        final, e não em uma resposta de
+                                        redirecionamento intermediária.
   2. POST DATASUL_LOGIN_ACTION_PATH -> envia usuário/senha + _csrf + domínio.
                                         Se as credenciais forem válidas, o
-                                        servidor responde com um redirect
-                                        (302/303) e troca o cookie de sessão
-                                        por um já autenticado.
-  3. Segue manualmente a cadeia de redirects (login?back_to=... ->
-     totvs-menu/?ticket=...) até não haver mais redirect, confirmando que a
-     sessão ficou autenticada.
+                                        servidor encadeia uma série de
+                                        redirects (login?back_to=... ->
+                                        totvs-menu/?ticket=...) até uma
+                                        página final autenticada. Como o
+                                        cliente também segue redirects
+                                        automaticamente aqui, terminamos já
+                                        na página final, com o cookie de
+                                        sessão (JSESSIONID) autenticado.
 
 O resultado guardado por usuário não é um Bearer token, e sim os cookies de
 sessão (principalmente JSESSIONID) que devem ser reenviados em toda chamada
@@ -32,10 +39,18 @@ import httpx
 from .config import Settings
 
 _CSRF_PATTERNS = [
-    re.compile(r'name=["\']_csrf["\']\s+value=["\']([^"\']+)["\']', re.IGNORECASE),
-    re.compile(r'value=["\']([^"\']+)["\']\s+name=["\']_csrf["\']', re.IGNORECASE),
-    re.compile(r'<meta\s+name=["\']_csrf["\']\s+content=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'name=["\']_csrf["\']\s+value=["\']([^"\']+)["\']', re.IGNORECASE | re.DOTALL),
+    re.compile(r'value=["\']([^"\']+)["\']\s+name=["\']_csrf["\']', re.IGNORECASE | re.DOTALL),
+    re.compile(r'<meta\s+name=["\']_csrf["\']\s+content=["\']([^"\']+)["\']', re.IGNORECASE | re.DOTALL),
+    # Fallback: qualquer input cujo name seja _csrf, mesmo com outros
+    # atributos (id, class, etc.) entre name e value, em qualquer ordem.
+    re.compile(r'<input[^>]*name=["\']_csrf["\'][^>]*value=["\']([^"\']+)["\']', re.IGNORECASE | re.DOTALL),
+    re.compile(r'<input[^>]*value=["\']([^"\']+)["\'][^>]*name=["\']_csrf["\']', re.IGNORECASE | re.DOTALL),
 ]
+
+# Trechos de URL que indicam que ainda estamos em uma página de login
+# (usado para detectar falha de autenticação após seguir os redirects).
+_LOGIN_PAGE_MARKERS = ("loginform", "/totvs-login/login")
 
 
 class DatasulAuthError(Exception):
@@ -82,9 +97,12 @@ class DatasulAuthClient:
         async with httpx.AsyncClient(
             timeout=settings.DATASUL_TIMEOUT,
             verify=settings.DATASUL_VERIFY_SSL,
-            follow_redirects=False,
+            follow_redirects=True,
+            max_redirects=settings.DATASUL_MAX_REDIRECTS,
         ) as client:
-            # 1) Página de login: cria sessão anônima + expõe o token _csrf
+            # 1) Página de login: cria sessão anônima + expõe o token _csrf.
+            #    follow_redirects=True garante que pousamos na página HTML
+            #    real do formulário, mesmo que haja redirects intermediários.
             try:
                 form_resp = await client.get(settings.login_form_url)
             except httpx.RequestError as exc:
@@ -96,12 +114,17 @@ class DatasulAuthClient:
             csrf_token = _extract_csrf(form_resp.text)
             if not csrf_token:
                 raise DatasulAuthError(
-                    "Não foi possível localizar o token _csrf na página de login do Datasul. "
+                    "Não foi possível localizar o token _csrf na página de login do Datasul "
+                    f"(URL final: {form_resp.url}, status: {form_resp.status_code}). "
                     "A versão/tela pode ter mudado.",
                     status_code=502,
+                    details=form_resp.text[:500],
                 )
 
-            # 2) Submete usuário/senha (mesmos campos observados no navegador)
+            # 2) Submete usuário/senha (mesmos campos observados no navegador).
+            #    O cliente segue automaticamente toda a cadeia de redirects
+            #    (login?back_to=... -> totvs-menu/?ticket=...) até a página
+            #    final, coletando os cookies de sessão autenticada.
             data = {
                 "j_username": username,
                 "j_password": password,
@@ -117,42 +140,24 @@ class DatasulAuthClient:
                     status_code=502,
                 ) from exc
 
-            if login_resp.status_code not in (302, 303):
+            final_url = str(login_resp.url).lower()
+            cookies = dict(client.cookies)
+
+            # Se, após seguir todos os redirects, ainda terminamos em uma
+            # página de login, as credenciais foram rejeitadas.
+            if any(marker in final_url for marker in _LOGIN_PAGE_MARKERS):
                 raise DatasulAuthError(
                     "Usuário ou senha inválidos.",
                     status_code=401,
-                    details=login_resp.text[:300],
+                    details=f"URL final: {login_resp.url}",
                 )
 
-            # 3) Segue a cadeia de redirects manualmente (login?back_to=... ->
-            #    totvs-menu/?ticket=...) até estabilizar a sessão autenticada.
-            location = login_resp.headers.get("location")
-            hops = 0
-            while location and hops < settings.DATASUL_MAX_REDIRECTS:
-                next_url = location if location.startswith("http") else (
-                    f"{settings.DATASUL_BASE_URL.rstrip('/')}{location}"
-                    if location.startswith("/")
-                    else f"{settings.DATASUL_BASE_URL.rstrip('/')}/{location}"
-                )
-                try:
-                    hop_resp = await client.get(next_url)
-                except httpx.RequestError as exc:
-                    raise DatasulAuthError(
-                        f"Falha ao seguir redirecionamento do Datasul ({next_url}): {exc}",
-                        status_code=502,
-                    ) from exc
-
-                if hop_resp.status_code not in (301, 302, 303, 307, 308):
-                    break
-                location = hop_resp.headers.get("location")
-                hops += 1
-
-            cookies = dict(client.cookies)
             if "JSESSIONID" not in cookies:
                 raise DatasulAuthError(
                     "Login não retornou uma sessão válida (JSESSIONID ausente). "
                     "Verifique usuário, senha e domínio.",
                     status_code=401,
+                    details=f"URL final: {login_resp.url}",
                 )
 
             return DatasulSession(cookies=cookies)

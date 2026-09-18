@@ -11,7 +11,7 @@ async function loadSession() {
     }
     const data = await response.json();
     userLabel.textContent = `Conectado como: ${data.username}`;
-    claimsBox.textContent = JSON.stringify(data.claims, null, 2);
+    claimsBox.textContent = JSON.stringify(data, null, 2);
   } catch (err) {
     window.location.href = "/";
   }

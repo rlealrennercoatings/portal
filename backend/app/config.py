@@ -9,16 +9,16 @@ descrito genericamente na documentação da TOTVS (endpoint
 /totvs-login/connect/token). Em vez disso, o "totvs-login" usa um login
 clássico baseado em formulário (Spring Security), com:
 
-  - GET  /totvs-login/loginForm   -> retorna a página HTML de login e cria
-                                      uma sessão anônima (cookie JSESSIONID),
-                                      contendo um token _csrf embutido no HTML.
+  - GET  /totvs-login/loginForm   -> (pode envolver redirects internos)
+                                      até chegar na página HTML de login,
+                                      que contém um token _csrf embutido e
+                                      cria uma sessão anônima (JSESSIONID).
   - POST /totvs-login/ACS?login   -> envia j_username, j_password, _csrf,
                                       j_domain e chosenLang. Em caso de
-                                      sucesso, responde 302 e troca o
-                                      JSESSIONID por um novo, autenticado.
-  - Em seguida, o navegador segue uma cadeia de redirects
-    (login?back_to=... -> totvs-menu/?ticket=...) até chegar autenticado
-    no totvs-menu.
+                                      sucesso, o servidor encadeia vários
+                                      redirects (login?back_to=... ->
+                                      totvs-menu/?ticket=...) até estabelecer
+                                      uma sessão autenticada (novo JSESSIONID).
 
 Ou seja: a "credencial" que o portal precisa guardar por usuário não é um
 Bearer/JWT, e sim o cookie de sessão (JSESSIONID) obtido ao final desse
@@ -47,9 +47,9 @@ class Settings(BaseSettings):
     # Domínio de autenticação (fixo neste ambiente: RHSA)
     DATASUL_DOMAIN: str = "RHSA"
     DATASUL_LANG: str = "pt"
-    # Máximo de redirects a seguir manualmente após o login, até considerar
-    # a sessão estabelecida.
-    DATASUL_MAX_REDIRECTS: int = 10
+    # Máximo de redirects a seguir (GET inicial e POST de login podem
+    # envolver várias etapas até a sessão ficar estabelecida).
+    DATASUL_MAX_REDIRECTS: int = 20
 
     # Verificação de certificado TLS (deixe True em produção)
     DATASUL_VERIFY_SSL: bool = True

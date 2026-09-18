@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal Datasul · Login</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="brand-badge">TD</div>
+      <div>
+        <h1>Portal de Integração Datasul</h1>
+        <p>Autenticação centralizada · TOTVS Datasul (OAuth2)</p>
+      </div>
+    </div>
+
+    <form id="login-form">
+      <label for="username">Usuário</label>
+      <input id="username" name="username" type="text" autocomplete="username" required />
+
+      <label for="password">Senha</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+
+      <button type="submit" id="submit-btn">Entrar</button>
+    </form>
+
+    <div id="message" class="message"></div>
+
+    <p class="footnote">
+      As credenciais são enviadas diretamente ao serviço de autenticação do TOTVS Datasul
+      (totvs-login). Este portal não armazena senhas.
+    </p>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

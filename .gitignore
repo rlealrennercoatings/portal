@@ -1,0 +1,13 @@
+# Segredos e configuração de ambiente — NUNCA versionar
+backend/.env 
+backend/.env.local 
+backend/.env.production
+ 
+# Python 
+backend/.venv/ 
+__pycache__/ 
+*.pyc 
+
+# Docker / sistema 
+.DS_Store 
+*.log

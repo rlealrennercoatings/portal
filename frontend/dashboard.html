@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal Datasul · Painel</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="card dashboard">
+    <div class="brand">
+      <div class="brand-badge">TD</div>
+      <div>
+        <h1>Portal de Integração Datasul</h1>
+        <p>Sessão autenticada</p>
+      </div>
+    </div>
+
+    <div class="status-row">
+      <span class="dot"></span>
+      <strong id="user-label">Verificando sessão...</strong>
+    </div>
+
+    <div class="claims-box" id="claims-box">Carregando informações do token...</div>
+
+    <div class="next-steps">
+      <h2>Próximos passos deste alicerce</h2>
+      <ul>
+        <li>Adicionar novos <code>routers</code> em <code>backend/app/routers/</code> para cada API Progress 4GL a ser consumida.</li>
+        <li>Reaproveitar <code>Depends(get_current_session)</code> para exigir login e renovar token automaticamente.</li>
+        <li>Adaptar <code>DATASUL_TOKEN_PATH</code>, <code>grant_type</code> e client_id/secret conforme a configuração OAuth2 do seu ambiente.</li>
+        <li>Trocar o armazenamento de sessão em memória por Redis antes de escalar para múltiplas instâncias.</li>
+      </ul>
+    </div>
+
+    <span class="logout-link" id="logout-link">Sair</span>
+  </div>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>

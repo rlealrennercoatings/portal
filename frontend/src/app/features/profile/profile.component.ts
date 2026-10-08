@@ -19,19 +19,24 @@ import { TranslationService } from '../../core/i18n/translation.service';
 
       <div class="panel" *ngIf="user; else emptyState">
         <div class="details">
-          <div><span>{{ t('profile.login') }}</span><strong>{{ user.login }}</strong></div>
-          <div><span>{{ t('profile.name') }}</span><strong>{{ user.name }}</strong></div>
-          <div><span>{{ t('profile.email') }}</span><strong>{{ user.email }}</strong></div>
-          <div><span>{{ t('profile.company') }}</span><strong>{{ user.company }}</strong></div>
-          <div><span>{{ t('profile.establishment') }}</span><strong>{{ user.establishment }}</strong></div>
+          <div class="detail-item"><span>{{ t('profile.login') }}</span><strong>{{ user.login }}</strong></div>
+          <div class="detail-item"><span>{{ t('profile.name') }}</span><strong>{{ user.name }}</strong></div>
+          <div class="detail-item"><span>{{ t('profile.email') }}</span><strong>{{ user.email }}</strong></div>
         </div>
       </div>
 
       <div class="panel groups">
-        <h2>{{ t('profile.groups') }}</h2>
-        <ul>
-          <li *ngFor="let group of groups">{{ group.name }}</li>
-        </ul>
+        <div class="groups-header">
+          <h2>{{ t('profile.groups') }}</h2>
+          <span class="group-count">{{ groups.length }}</span>
+        </div>
+
+        <div class="group-grid">
+          <div class="group-card" *ngFor="let group of groups">
+            <span class="group-code">{{ group.id || group.name }}</span>
+            <strong class="group-name">{{ group.description || group.name }}</strong>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -46,15 +51,87 @@ import { TranslationService } from '../../core/i18n/translation.service';
       .header { margin-bottom: 20px; }
       .eyebrow { text-transform: uppercase; letter-spacing: .08em; color: #0f4b9f; font-size: 12px; font-weight: 700; }
       h1 { margin: 8px 0 0; }
-      .panel { background: white; border-radius: 14px; border: 1px solid #edf2fa; padding: 24px; margin-bottom: 20px; }
-      .details { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; }
-      .details div { display: grid; gap: 6px; }
-      .details span { color: #5d6b7d; font-size: 0.8rem; text-transform: uppercase; }
-      .groups ul { padding-left: 20px; display: grid; gap: 8px; }
+      .panel {
+        background: white;
+        border-radius: 18px;
+        border: 1px solid #edf2fa;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 24px rgba(27, 38, 57, 0.04);
+      }
+      .details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px;
+      }
+      .detail-item {
+        display: grid;
+        gap: 8px;
+        padding: 16px 18px;
+        border: 1px solid #eef1f6;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #fff, #fafbff);
+      }
+      .details span {
+        color: #5d6b7d;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .groups-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .groups-header h2 {
+        margin: 0;
+      }
+      .group-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        height: 30px;
+        padding: 0 10px;
+        background: linear-gradient(135deg, var(--renner-red-600), var(--renner-red-900));
+        color: white;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+      }
+      .group-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+      }
+      .group-card {
+        display: grid;
+        gap: 8px;
+        padding: 16px 18px;
+        border-radius: 14px;
+        border: 1px solid #f1d8dc;
+        background: linear-gradient(180deg, #fff8f8 0%, #fff 100%);
+      }
+      .group-code {
+        color: var(--renner-red-700);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .group-name {
+        color: var(--renner-ink);
+        font-size: 0.98rem;
+        line-height: 1.4;
+      }
       .empty { color: #5d6b7d; }
 
       @media (max-width: 520px) {
         .page-shell { padding: 20px 16px; }
+        .panel { padding: 18px 16px; }
+        .groups-header { align-items: flex-start; }
       }
     `
   ]
@@ -76,7 +153,7 @@ export class ProfileComponent implements OnInit {
       },
       error: () => {
         this.user = this.authService.getCurrentUser();
-        this.groups = [];
+        this.groups = this.authService.getCurrentGroups();
       }
     });
   }

@@ -28,15 +28,12 @@ import { LocaleCode, TranslationService } from '../../core/i18n/translation.serv
 
         <div class="brand-block">
           <img src="assets/renner.png" alt="Renner" class="renner-logo" />
-          <span class="brand-badge">{{ t('app.portal') }}</span>
-          <h1>{{ t('login.title') }}</h1>
-          <p>{{ t('login.subtitle') }}</p>
         </div>
 
         <form [formGroup]="form" (ngSubmit)="submit()" class="login-form">
           <label>
             <span>{{ t('login.environment') }}</span>
-            <select formControlName="environmentId">
+            <select formControlName="environmentId" (change)="onEnvironmentChange($event)">
               <option *ngFor="let environment of environments" [value]="environment.id">
                 {{ environment.label }}
               </option>
@@ -87,72 +84,59 @@ import { LocaleCode, TranslationService } from '../../core/i18n/translation.serv
 
       .language-switcher {
         display: flex;
-        justify-content: flex-end;
+        justify-content: center;
+        align-items: center;
         gap: 8px;
-        margin-bottom: 12px;
+        margin: 0 auto 12px;
         flex-wrap: wrap;
+        width: 100%;
       }
 
       .language-switcher button {
         appearance: none;
-        border: 1px solid #f4d0d4;
-        background: #fff;
+        border: 1px solid #f1d1d4;
+        background: rgba(255, 255, 255, 0.82);
         color: var(--renner-ink);
         border-radius: 999px;
-        padding: 6px 10px;
+        padding: 7px 12px;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 6px;
         cursor: pointer;
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 600;
         transition: all 0.2s ease;
+        line-height: 1.2;
+        box-shadow: 0 4px 12px rgba(123, 15, 26, 0.06);
+      }
+
+      .language-switcher button:hover {
+        border-color: var(--renner-red-600);
+        transform: translateY(-1px);
       }
 
       .language-switcher button.active {
         background: linear-gradient(135deg, var(--renner-red-600), var(--renner-red-900));
         color: #fff;
         border-color: transparent;
+        box-shadow: 0 8px 18px rgba(162, 29, 42, 0.2);
       }
 
       .brand-block {
-        margin-bottom: 24px;
+        margin-bottom: 18px;
         display: grid;
         justify-items: center;
-        gap: 12px;
         text-align: center;
       }
 
       .renner-logo {
         display: block;
-        width: clamp(108px, 34vw, 140px);
+        width: clamp(110px, 32vw, 150px);
         height: auto;
         object-fit: contain;
-        margin: 0 auto 4px;
-      }
-
-      .brand-badge {
-        display: inline-block;
-        width: fit-content;
-        background: linear-gradient(135deg, var(--renner-red-600), var(--renner-red-900));
-        color: #fff;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      h1 {
-        margin: 0;
-        font-size: clamp(1.7rem, 4vw, 2.4rem);
-        color: var(--renner-red-900);
-      }
-
-      p {
-        margin: 0;
-        color: var(--renner-muted);
+        margin: 0 auto;
+        filter: drop-shadow(0 6px 12px rgba(123, 15, 26, 0.12));
       }
 
       .login-form {
@@ -167,22 +151,35 @@ import { LocaleCode, TranslationService } from '../../core/i18n/translation.serv
         color: var(--renner-ink);
       }
 
+      label span {
+        font-size: 0.86rem;
+        letter-spacing: 0.02em;
+      }
+
       select,
       input {
         width: 100%;
-        border: 1px solid #f0c6ca;
+        border: 1px solid #efcbd0;
         border-radius: 12px;
         height: 46px;
         padding: 0 14px;
         font-size: 1rem;
         box-sizing: border-box;
         background: #fff;
+        color: var(--renner-ink);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+      }
+
+      select:hover,
+      input:hover {
+        border-color: #e1a3aa;
       }
 
       select:focus,
       input:focus {
-        outline: 2px solid rgba(194, 40, 45, 0.18);
+        outline: none;
         border-color: var(--renner-red-600);
+        box-shadow: 0 0 0 4px rgba(194, 40, 45, 0.12);
       }
 
       button {
@@ -194,6 +191,12 @@ import { LocaleCode, TranslationService } from '../../core/i18n/translation.serv
         font-weight: 700;
         cursor: pointer;
         box-shadow: 0 12px 24px rgba(182, 35, 45, 0.25);
+        transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        filter: brightness(1.03);
       }
 
       button:disabled {
@@ -204,6 +207,7 @@ import { LocaleCode, TranslationService } from '../../core/i18n/translation.serv
       .error {
         color: #a91f2d;
         font-size: 0.9rem;
+        margin: -6px 0 0;
       }
 
       @media (max-width: 520px) {
@@ -218,6 +222,18 @@ import { LocaleCode, TranslationService } from '../../core/i18n/translation.serv
 
         .language-switcher {
           justify-content: center;
+          width: 100%;
+          margin-bottom: 10px;
+        }
+
+        .language-switcher button {
+          flex: 0 0 auto;
+          min-width: 0;
+          padding: 7px 10px;
+        }
+
+        .language-switcher button span:last-child {
+          display: none;
         }
       }
     `
@@ -228,8 +244,9 @@ export class LoginComponent implements OnInit {
   errorMessage = '';
   currentLocale: LocaleCode = 'pt';
   languageOptions = this.translationService.getLanguageOptions();
+  environmentOptions: { label: string; value: string }[] = [];
   environments: DatasulEnvironmentOption[] = [
-    { id: 'chile-desenv', label: 'Chile - Desenvolvimento', country: 'Chile', stage: 'desenvolvimento', baseUrl: 'https://erp-chile-desenv.renner.com.br' },
+    { id: 'cl-desenv', label: 'Chile - Desenvolvimento', country: 'Chile', stage: 'desenvolvimento', baseUrl: 'https://erp-chile-desenv.renner.com.br' },
     { id: 'br-desenv', label: 'Brasil - Desenvolvimento', country: 'Brasil', stage: 'desenvolvimento', baseUrl: 'https://erp-desenv.renner.com.br' },
     { id: 'pe-desenv', label: 'Peru - Desenvolvimento', country: 'Peru', stage: 'desenvolvimento', baseUrl: 'https://erp-peru-desenv.renner.com.br' },
     { id: 'br-homolog', label: 'Brasil - Homologação', country: 'Brasil', stage: 'homologacao', baseUrl: 'https://erp-homol.renner.com.br' },
@@ -241,7 +258,7 @@ export class LoginComponent implements OnInit {
   ];
 
   form = new FormGroup({
-    environmentId: new FormControl('chile-desenv', { nonNullable: true, validators: [Validators.required] }),
+    environmentId: new FormControl(this.authService.getLastSelectedEnvironmentId(), { nonNullable: true, validators: [Validators.required] }),
     username: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     password: new FormControl('', { nonNullable: true, validators: [Validators.required] })
   });
@@ -258,8 +275,20 @@ export class LoginComponent implements OnInit {
     this.authService.getAvailableEnvironments().subscribe((environments) => {
       if (environments.length > 0) {
         this.environments = environments;
-        const selected = environments.find((environment) => environment.id === 'chile-desenv') ?? environments[0];
+        this.environmentOptions = environments.map((environment) => ({
+          label: environment.label,
+          value: environment.id
+        }));
+
+        const preferredEnvironmentId = this.authService.getLastSelectedEnvironmentId();
+        const selected = environments.find((environment) => environment.id === preferredEnvironmentId) ?? environments[0];
         this.form.controls.environmentId.setValue(selected.id, { emitEvent: false });
+        this.authService.setLastSelectedEnvironmentId(selected.id);
+      } else {
+        this.environmentOptions = this.environments.map((environment) => ({
+          label: environment.label,
+          value: environment.id
+        }));
       }
     });
   }
@@ -273,10 +302,19 @@ export class LoginComponent implements OnInit {
     this.currentLocale = locale;
   }
 
+  onEnvironmentChange(event: Event): void {
+    const target = event.target as HTMLSelectElement | null;
+    const environmentId = target?.value ?? this.authService.getLastSelectedEnvironmentId();
+    this.authService.setLastSelectedEnvironmentId(environmentId);
+  }
+
   submit(): void {
     if (this.form.invalid) {
       return;
     }
+
+    const selectedEnvironmentId = this.form.value.environmentId ?? this.authService.getLastSelectedEnvironmentId();
+    this.authService.setLastSelectedEnvironmentId(selectedEnvironmentId);
 
     this.submitting = true;
     this.errorMessage = '';
@@ -285,7 +323,7 @@ export class LoginComponent implements OnInit {
       .login(
         this.form.value.username ?? '',
         this.form.value.password ?? '',
-        this.form.value.environmentId ?? 'chile-desenv'
+        selectedEnvironmentId
       )
       .subscribe({
         next: () => this.router.navigateByUrl('/dashboard'),

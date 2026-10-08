@@ -13,6 +13,7 @@ export interface PortalUser {
   company: string;
   establishment: string;
   environment?: DatasulEnvironmentOption;
+  groups?: PortalGroup[];
 }
 
 export interface PortalGroup {
@@ -32,12 +33,25 @@ export interface DatasulEnvironmentOption {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly STORAGE_KEY = 'portal-user';
+  private readonly LAST_ENVIRONMENT_KEY = 'portal-last-environment';
   private readonly http = inject(HttpClient);
   private readonly apiBaseUrl = environment.apiUrl;
 
   private buildUrl(path: string): string {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     return `${this.apiBaseUrl.replace(/\/$/, '')}${normalizedPath}`;
+  }
+
+  setLastSelectedEnvironmentId(environmentId: string): void {
+    if (!environmentId) {
+      return;
+    }
+
+    localStorage.setItem(this.LAST_ENVIRONMENT_KEY, environmentId);
+  }
+
+  getLastSelectedEnvironmentId(): string {
+    return localStorage.getItem(this.LAST_ENVIRONMENT_KEY) ?? 'chile-desenv';
   }
 
   login(
@@ -65,11 +79,16 @@ export class AuthService {
             throw new Error('Resposta inválida do servidor.');
           }
 
+          const groups = response.groups ?? [];
           const environment = response.environment ?? this.getEnvironmentFromId(environmentId);
-          const userWithEnvironment = { ...user, environment };
+          const userWithEnvironment = { ...user, environment, groups };
+
+          if (environment?.id) {
+            this.setLastSelectedEnvironmentId(environment.id);
+          }
 
           localStorage.setItem(this.STORAGE_KEY, JSON.stringify(userWithEnvironment));
-          return { user: userWithEnvironment, groups: response.groups ?? [], environment };
+          return { user: userWithEnvironment, groups, environment };
         }),
         catchError((error) => {
           const message = error?.error?.message ?? 'Usuário ou senha inválidos.';
@@ -93,7 +112,7 @@ export class AuthService {
       { id: 'br-desenv', label: 'Brasil - Desenvolvimento', country: 'Brasil', stage: 'desenvolvimento', baseUrl: 'https://erp-desenv.renner.com.br' },
       { id: 'cl-prod', label: 'Chile - Produção', country: 'Chile', stage: 'production', baseUrl: 'https://erp-chile.renner.com.br' },
       { id: 'cl-homolog', label: 'Chile - Homologação', country: 'Chile', stage: 'homologacao', baseUrl: 'https://erp-chile-homol.renner.com.br' },
-      { id: 'chile-desenv', label: 'Chile - Desenvolvimento', country: 'Chile', stage: 'desenvolvimento', baseUrl: 'https://erp-chile-desenv.renner.com.br' },
+      { id: 'cl-desenv', label: 'Chile - Desenvolvimento', country: 'Chile', stage: 'desenvolvimento', baseUrl: 'https://erp-chile-desenv.renner.com.br' },
       { id: 'pe-prod', label: 'Peru - Produção', country: 'Peru', stage: 'production', baseUrl: 'https://erp-peru.renner.com.br' },
       { id: 'pe-homolog', label: 'Peru - Homologação', country: 'Peru', stage: 'homologacao', baseUrl: 'https://erp-peru-homol.renner.com.br' },
       { id: 'pe-desenv', label: 'Peru - Desenvolvimento', country: 'Peru', stage: 'desenvolvimento', baseUrl: 'https://erp-peru-desenv.renner.com.br' },
@@ -109,7 +128,13 @@ export class AuthService {
         map((session) => {
           const user = session?.authenticated ? session.user ?? null : null;
           if (user) {
-            const userWithEnvironment = { ...user, environment: session.environment ?? user.environment };
+            const groups = session.groups ?? user.groups ?? [];
+            const userWithEnvironment = {
+              ...user,
+              environment: session.environment ?? user.environment,
+              groups,
+            };
+
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(userWithEnvironment));
             return userWithEnvironment;
           }
@@ -164,6 +189,10 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  getCurrentGroups(): PortalGroup[] {
+    return this.getCurrentUser()?.groups ?? [];
   }
 
   isAuthenticated(): boolean {

@@ -32,7 +32,7 @@ const defaultDatasulEnvironments: DatasulEnvironment[] = [
   { id: 'br-desenv', label: 'Brasil - Desenvolvimento', country: 'Brasil', stage: 'desenvolvimento', baseUrl: 'https://erp-desenv.renner.com.br' },
   { id: 'cl-prod', label: 'Chile - Produção', country: 'Chile', stage: 'production', baseUrl: 'https://erp-chile.renner.com.br' },
   { id: 'cl-homolog', label: 'Chile - Homologação', country: 'Chile', stage: 'homologacao', baseUrl: 'https://erp-chile-homol.renner.com.br' },
-  { id: 'chile-desenv', label: 'Chile - Desenvolvimento', country: 'Chile', stage: 'desenvolvimento', baseUrl: 'https://erp-chile-desenv.renner.com.br' },
+  { id: 'cl-desenv', label: 'Chile - Desenvolvimento', country: 'Chile', stage: 'desenvolvimento', baseUrl: 'https://erp-chile-desenv.renner.com.br' },
   { id: 'pe-prod', label: 'Peru - Produção', country: 'Peru', stage: 'production', baseUrl: 'https://erp-peru.renner.com.br' },
   { id: 'pe-homolog', label: 'Peru - Homologação', country: 'Peru', stage: 'homologacao', baseUrl: 'https://erp-peru-homol.renner.com.br' },
   { id: 'pe-desenv', label: 'Peru - Desenvolvimento', country: 'Peru', stage: 'desenvolvimento', baseUrl: 'https://erp-peru-desenv.renner.com.br' },
@@ -57,6 +57,41 @@ export class DatasulService {
     { id: 'grp-ti', name: 'TI', description: 'Suporte e manutenção' },
   ];
 
+  private normalizeDatasulGroups(
+    groups?: Array<string | { id?: string; name?: string; description?: string; codigo?: string; descricao?: string }> | null,
+  ) {
+    if (!Array.isArray(groups) || groups.length === 0) {
+      return this.defaultGroups;
+    }
+
+    return groups
+      .map((group) => {
+        if (typeof group === 'string') {
+          const normalizedName = group.trim();
+          return {
+            id: normalizedName,
+            name: normalizedName,
+            description: 'Grupo Datasul',
+          };
+        }
+
+        const code = String(group.codigo ?? group.id ?? group.name ?? '').trim();
+        const description = String(group.descricao ?? group.description ?? group.name ?? group.codigo ?? '').trim();
+        const normalizedName = description || code || 'Grupo Datasul';
+
+        if (!code && !description) {
+          return null;
+        }
+
+        return {
+          id: code || normalizedName,
+          name: normalizedName,
+          description: description || 'Grupo Datasul',
+        };
+      })
+      .filter((group): group is { id: string; name: string; description: string } => !!group);
+  }
+
   getAvailableEnvironments(): DatasulEnvironment[] {
     const raw = process.env.DATASUL_ENVIRONMENTS;
 
@@ -78,7 +113,7 @@ export class DatasulService {
 
   private getEnvironment(environmentId?: string): DatasulEnvironment {
     const environments = this.getAvailableEnvironments();
-    const defaultEnvironmentId = process.env.DATASUL_DEFAULT_ENVIRONMENT ?? 'chile-desenv';
+    const defaultEnvironmentId = process.env.DATASUL_DEFAULT_ENVIRONMENT ?? 'cl-desenv';
     const requestedEnvironment = environmentId ?? defaultEnvironmentId;
 
     return (
@@ -171,11 +206,12 @@ export class DatasulService {
         );
       }
 
+      const datasulGroups = this.normalizeDatasulGroups(authResult?.grupos as any);
       const user = {
         id: normalizedLogin,
         login: normalizedLogin,
         name: String(authResult?.nom_usuario ?? normalizedLogin),
-        email: `${normalizedLogin}@datasul.local`,
+        email: String(authResult?.email ?? `${normalizedLogin}@datasul.local`),
         company: 'UNKNOWN',
         establishment: 'UNKNOWN',
       };
@@ -184,7 +220,7 @@ export class DatasulService {
       this.sessions.set(sessionId, {
         login: normalizedLogin,
         user,
-        groups: this.defaultGroups,
+        groups: datasulGroups,
         environmentId: selectedEnvironment.id,
         environmentLabel: selectedEnvironment.label,
         createdAt: new Date(),
@@ -192,7 +228,7 @@ export class DatasulService {
 
       return {
         user,
-        groups: this.defaultGroups,
+        groups: datasulGroups,
         sessionId,
       };
     } catch (error) {

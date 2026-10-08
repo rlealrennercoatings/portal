@@ -33,7 +33,7 @@ export class AuthService {
 
     return this.http
       .post<{ success: boolean; user: PortalUser; groups: PortalGroup[] }>(
-        'http://localhost:3000/api/auth/login',
+        '/api/auth/login',
         { username: normalizedUsername, password: normalizedPassword },
         { withCredentials: true }
       )
@@ -56,7 +56,7 @@ export class AuthService {
 
   hydrateSession(): Observable<PortalUser | null> {
     return this.http
-      .get<{ authenticated: boolean; user?: PortalUser; groups?: PortalGroup[] }>('http://localhost:3000/api/auth/session', {
+      .get<{ authenticated: boolean; user?: PortalUser; groups?: PortalGroup[] }>('/api/auth/session', {
         withCredentials: true,
       })
       .pipe(
@@ -79,10 +79,10 @@ export class AuthService {
 
   getUserProfile(): Observable<{ user: PortalUser; groups: PortalGroup[] }> {
     return this.http
-      .get<PortalUser>('http://localhost:3000/api/me', { withCredentials: true })
+      .get<PortalUser>('/api/me', { withCredentials: true })
       .pipe(
         switchMap((user) =>
-          this.http.get<PortalGroup[]>('http://localhost:3000/api/me/groups', { withCredentials: true }).pipe(
+          this.http.get<PortalGroup[]>('/api/me/groups', { withCredentials: true }).pipe(
             map((groups) => ({ user, groups }))
           )
         ),
@@ -95,7 +95,7 @@ export class AuthService {
 
   logout(): void {
     localStorage.removeItem(this.STORAGE_KEY);
-    this.http.post('http://localhost:3000/api/auth/logout', {}, { withCredentials: true }).subscribe();
+    this.http.post('/api/auth/logout', {}, { withCredentials: true }).subscribe();
   }
 
   getCurrentUser(): PortalUser | null {

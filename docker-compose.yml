@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   backend:
     build:
@@ -7,11 +5,13 @@ services:
       dockerfile: Dockerfile.backend
     container_name: portal-backend
     ports:
-      - '3000:3000'
+      - "3000:3000"
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3000
       SESSION_SECRET: change-me
+    networks:
+      - proxy_net
 
   frontend:
     build:
@@ -19,8 +19,12 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: portal-frontend
     ports:
-      - '4200:4200'
-    environment:
-      ANGULAR_API_BASE_URL: http://localhost:3000/api
+      - "4200:4200"
     depends_on:
       - backend
+    networks:
+      - proxy_net
+
+networks:
+  proxy_net:
+    external: true

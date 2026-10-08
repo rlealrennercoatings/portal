@@ -52,10 +52,20 @@ export class DatasulService {
   }
 
   private readonly defaultGroups = [
-    { id: 'grp-admin', name: 'Administradores', description: 'Acesso total ao portal' },
+    { id: 'sup', name: 'Administradores', description: 'Acesso total ao portal' },
     { id: 'grp-comercial', name: 'Comercial', description: 'Área comercial' },
     { id: 'grp-ti', name: 'TI', description: 'Suporte e manutenção' },
   ];
+
+  private normalizeGroupAlias(group: string): string {
+    const normalized = group.trim().toLowerCase();
+
+    if (['sup', 's.u.p', 'supervisor', 'supervisores', 'grp-admin', 'admin', 'admins', 'administrador', 'administradores'].includes(normalized)) {
+      return 'sup';
+    }
+
+    return normalized;
+  }
 
   private normalizeDatasulGroups(
     groups?: Array<string | { id?: string; name?: string; description?: string; codigo?: string; descricao?: string }> | null,
@@ -69,7 +79,7 @@ export class DatasulService {
         if (typeof group === 'string') {
           const normalizedName = group.trim();
           return {
-            id: normalizedName,
+            id: this.normalizeGroupAlias(normalizedName),
             name: normalizedName,
             description: 'Grupo Datasul',
           };
@@ -84,7 +94,7 @@ export class DatasulService {
         }
 
         return {
-          id: code || normalizedName,
+          id: this.normalizeGroupAlias(code || normalizedName),
           name: normalizedName,
           description: description || 'Grupo Datasul',
         };

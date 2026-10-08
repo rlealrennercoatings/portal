@@ -378,13 +378,22 @@ export class MenuService {
     return groups
       .map((group) => {
         if (typeof group === 'string') {
-          return group.trim().toLowerCase();
+          return this.normalizeGroupAlias(group);
         }
 
-        return group?.name ?? group?.codigo ?? group?.id ?? group?.login ?? '';
+        return this.normalizeGroupAlias(group?.name ?? group?.codigo ?? group?.id ?? group?.login ?? '');
       })
       .filter((group) => !!group)
       .map((group) => group.trim().toLowerCase());
+  }
+
+  private normalizeGroupAlias(group: string): string {
+    const normalized = group.trim().toLowerCase();
+    if (['sup', 's.u.p', 'supervisor', 'supervisores', 'grp-admin', 'admin', 'admins', 'administrador', 'administradores'].includes(normalized)) {
+      return 'sup';
+    }
+
+    return normalized;
   }
 
   private ensureRequiredGroup(areaId: string, applicationId: string, groups: string[]): string[] {

@@ -17,7 +17,7 @@ export class MenuAdminGuard implements CanActivate {
         .filter((value): value is string => !!value)
         .map((value) => value.trim().toLowerCase());
 
-      return values.includes('sup') || values.includes('s.u.p') || values.includes('supervisor');
+      return values.some((value) => ['sup', 's.u.p', 'supervisor', 'supervisores', 'grp-admin', 'admin', 'admins', 'administrador', 'administradores'].includes(value));
     });
 
     return hasSupAccess ? true : this.router.createUrlTree(['/dashboard']);

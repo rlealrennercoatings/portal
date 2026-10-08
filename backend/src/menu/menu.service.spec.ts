@@ -79,6 +79,13 @@ describe('MenuService', () => {
     expect(service.getAccessibleAreas(['fin']).some((area) => area.id === 'foundation')).toBe(false);
   });
 
+  it('should treat admin aliases as SUP for Foundation access', () => {
+    const areas = service.getAccessibleAreas(['Administradores']);
+
+    expect(areas.some((area) => area.id === 'foundation')).toBe(true);
+    expect(service.getAccessibleAreas(['grp-admin']).some((area) => area.id === 'foundation')).toBe(true);
+  });
+
   it('should keep the SUP group always enabled for the menu administration application', () => {
     const updated = service.updateApplication('foundation', 'menu-admin', { allowedGroups: ['fin'] });
 

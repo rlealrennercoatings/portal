@@ -1,6 +1,8 @@
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { TranslationService } from '../../core/i18n/translation.service';
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -9,34 +11,34 @@ import { RouterLink } from '@angular/router';
     <section class="page-shell">
       <header class="page-header">
         <div>
-          <p class="eyebrow">Visão geral</p>
+          <p class="eyebrow">{{ t('dashboard.overview') }}</p>
           <h1>Dashboard</h1>
         </div>
-        <a routerLink="/profile">Meu perfil</a>
+        <a routerLink="/profile">{{ t('dashboard.profileLink') }}</a>
       </header>
 
       <div class="grid">
         <article class="card primary">
-          <span>Usuários ativos</span>
+          <span>{{ t('dashboard.activeUsers') }}</span>
           <strong>1.248</strong>
         </article>
         <article class="card">
-          <span>Grupos Datasul</span>
+          <span>{{ t('dashboard.datasulGroups') }}</span>
           <strong>3</strong>
         </article>
         <article class="card">
-          <span>Aplicações</span>
+          <span>{{ t('dashboard.applications') }}</span>
           <strong>7</strong>
         </article>
       </div>
 
       <div class="panel">
-        <h2>Arquitetura preparada para crescimento</h2>
+        <h2>{{ t('dashboard.architectureTitle') }}</h2>
         <ul>
-          <li>Login autorizado pela identidade do Datasul</li>
-          <li>Menu extensível por área</li>
-          <li>Perfil com usuário e grupos</li>
-          <li>Plataforma base para novas aplicações</li>
+          <li>{{ t('dashboard.architectureItem1') }}</li>
+          <li>{{ t('dashboard.architectureItem2') }}</li>
+          <li>{{ t('dashboard.architectureItem3') }}</li>
+          <li>{{ t('dashboard.architectureItem4') }}</li>
         </ul>
       </div>
     </section>
@@ -45,7 +47,7 @@ import { RouterLink } from '@angular/router';
     `
       :host { display: block; }
       .page-shell { padding: 32px; }
-      .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+      .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 16px; }
       .eyebrow { text-transform: uppercase; letter-spacing: .08em; color: var(--renner-red-700); font-size: 12px; font-weight: 700; }
       h1 { margin: 8px 0 0; color: var(--renner-red-900); }
       a { color: var(--renner-red-700); text-decoration: none; font-weight: 600; }
@@ -56,7 +58,18 @@ import { RouterLink } from '@angular/router';
       .card strong { display: block; margin-top: 8px; font-size: 2rem; }
       .panel { background: white; border-radius: 14px; border: 1px solid #f0d0d3; padding: 24px; }
       ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+
+      @media (max-width: 520px) {
+        .page-shell { padding: 20px 16px; }
+        .page-header { flex-direction: column; align-items: flex-start; }
+      }
     `
   ]
 })
-export class DashboardComponent {}
+export class DashboardComponent {
+  constructor(private readonly translationService: TranslationService) {}
+
+  t(key: string): string {
+    return this.translationService.t(key);
+  }
+}

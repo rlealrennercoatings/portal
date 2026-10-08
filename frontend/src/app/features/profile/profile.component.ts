@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 
 import { AuthService, PortalGroup, PortalUser } from '../../core/auth/auth.service';
+import { TranslationService } from '../../core/i18n/translation.service';
 
 @Component({
   selector: 'app-profile',
@@ -11,23 +12,23 @@ import { AuthService, PortalGroup, PortalUser } from '../../core/auth/auth.servi
     <section class="page-shell">
       <div class="header">
         <div>
-          <p class="eyebrow">Meu perfil</p>
-          <h1>Dados do usuário</h1>
+          <p class="eyebrow">{{ t('profile.title') }}</p>
+          <h1>{{ t('profile.subtitle') }}</h1>
         </div>
       </div>
 
       <div class="panel" *ngIf="user; else emptyState">
         <div class="details">
-          <div><span>Login</span><strong>{{ user.login }}</strong></div>
-          <div><span>Nome</span><strong>{{ user.name }}</strong></div>
-          <div><span>E-mail</span><strong>{{ user.email }}</strong></div>
-          <div><span>Empresa</span><strong>{{ user.company }}</strong></div>
-          <div><span>Estabelecimento</span><strong>{{ user.establishment }}</strong></div>
+          <div><span>{{ t('profile.login') }}</span><strong>{{ user.login }}</strong></div>
+          <div><span>{{ t('profile.name') }}</span><strong>{{ user.name }}</strong></div>
+          <div><span>{{ t('profile.email') }}</span><strong>{{ user.email }}</strong></div>
+          <div><span>{{ t('profile.company') }}</span><strong>{{ user.company }}</strong></div>
+          <div><span>{{ t('profile.establishment') }}</span><strong>{{ user.establishment }}</strong></div>
         </div>
       </div>
 
       <div class="panel groups">
-        <h2>Grupos Datasul</h2>
+        <h2>{{ t('profile.groups') }}</h2>
         <ul>
           <li *ngFor="let group of groups">{{ group.name }}</li>
         </ul>
@@ -35,7 +36,7 @@ import { AuthService, PortalGroup, PortalUser } from '../../core/auth/auth.servi
     </section>
 
     <ng-template #emptyState>
-      <p class="empty">Nenhuma informação de usuário disponível.</p>
+      <p class="empty">{{ t('profile.empty') }}</p>
     </ng-template>
   `,
   styles: [
@@ -51,6 +52,10 @@ import { AuthService, PortalGroup, PortalUser } from '../../core/auth/auth.servi
       .details span { color: #5d6b7d; font-size: 0.8rem; text-transform: uppercase; }
       .groups ul { padding-left: 20px; display: grid; gap: 8px; }
       .empty { color: #5d6b7d; }
+
+      @media (max-width: 520px) {
+        .page-shell { padding: 20px 16px; }
+      }
     `
   ]
 })
@@ -58,7 +63,10 @@ export class ProfileComponent implements OnInit {
   user: PortalUser | null = null;
   groups: PortalGroup[] = [];
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly translationService: TranslationService
+  ) {}
 
   ngOnInit(): void {
     this.authService.getUserProfile().subscribe({
@@ -71,5 +79,9 @@ export class ProfileComponent implements OnInit {
         this.groups = [];
       }
     });
+  }
+
+  t(key: string): string {
+    return this.translationService.t(key);
   }
 }

@@ -19,10 +19,15 @@ export class AuthController {
 
   @Post('login')
   async login(
-    @Body() payload: { username: string; password: string; domain?: string },
+    @Body() payload: { username: string; password: string; domain?: string; environmentId?: string },
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.authService.login(payload.username, payload.password, payload.domain);
+    const result = await this.authService.login(
+      payload.username,
+      payload.password,
+      payload.domain,
+      payload.environmentId,
+    );
 
     res.cookie('portal_session', result.sessionId, {
       httpOnly: true,
@@ -36,6 +41,7 @@ export class AuthController {
       success: true,
       user: result.user,
       groups: result.groups,
+      environment: result.environment,
     };
   }
 
@@ -51,5 +57,10 @@ export class AuthController {
   getSession(@Req() req: Request) {
     const sessionId = this.getSessionIdFromCookie(req);
     return this.authService.getSession(sessionId);
+  }
+
+  @Get('environments')
+  getAvailableEnvironments() {
+    return this.authService.getAvailableEnvironments();
   }
 }

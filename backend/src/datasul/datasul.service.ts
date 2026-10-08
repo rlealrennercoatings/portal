@@ -2,6 +2,14 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 
+export interface DatasulEnvironment {
+  id: string;
+  label: string;
+  country: string;
+  stage: 'production' | 'homologacao' | 'desenvolvimento';
+  baseUrl: string;
+}
+
 interface DatasulSession {
   login: string;
   user: {
@@ -13,23 +21,29 @@ interface DatasulSession {
     establishment: string;
   };
   groups: Array<{ id: string; name: string; description: string }>;
+  environmentId?: string;
+  environmentLabel?: string;
   createdAt: Date;
 }
+
+const defaultDatasulEnvironments: DatasulEnvironment[] = [
+  { id: 'br-prod', label: 'Brasil - Produção', country: 'Brasil', stage: 'production', baseUrl: 'https://erp.renner.com.br' },
+  { id: 'br-homolog', label: 'Brasil - Homologação', country: 'Brasil', stage: 'homologacao', baseUrl: 'https://erp-homol.renner.com.br' },
+  { id: 'br-desenv', label: 'Brasil - Desenvolvimento', country: 'Brasil', stage: 'desenvolvimento', baseUrl: 'https://erp-desenv.renner.com.br' },
+  { id: 'cl-prod', label: 'Chile - Produção', country: 'Chile', stage: 'production', baseUrl: 'https://erp-chile.renner.com.br' },
+  { id: 'cl-homolog', label: 'Chile - Homologação', country: 'Chile', stage: 'homologacao', baseUrl: 'https://erp-chile-homol.renner.com.br' },
+  { id: 'chile-desenv', label: 'Chile - Desenvolvimento', country: 'Chile', stage: 'desenvolvimento', baseUrl: 'https://erp-chile-desenv.renner.com.br' },
+  { id: 'pe-prod', label: 'Peru - Produção', country: 'Peru', stage: 'production', baseUrl: 'https://erp-peru.renner.com.br' },
+  { id: 'pe-homolog', label: 'Peru - Homologação', country: 'Peru', stage: 'homologacao', baseUrl: 'https://erp-peru-homol.renner.com.br' },
+  { id: 'pe-desenv', label: 'Peru - Desenvolvimento', country: 'Peru', stage: 'desenvolvimento', baseUrl: 'https://erp-peru-desenv.renner.com.br' },
+];
 
 @Injectable()
 export class DatasulService {
   private readonly sessions = new Map<string, DatasulSession>();
 
-  private readonly loginUrl =
-    process.env.DATASUL_LOGIN_URL ?? 'https://erp-chile-desenv.renner.com.br/totvs-login/ACS?login';
-
-  private readonly restLoginUrl =
-    process.env.DATASUL_REST_LOGIN_URL ??
-    'https://erp-chile-desenv.renner.com.br/api/rest/sec/v1/login-api/login';
-
-  private readonly restLoginPathTemplate =
-    process.env.DATASUL_REST_LOGIN_PATH_TEMPLATE ??
-    '/api/rest/sec/v1/login-api/login';
+  private readonly restLoginPath =
+    process.env.DATASUL_REST_LOGIN_PATH ?? '/api/rest/sec/v1/login-api/login';
 
   private readonly invalidCredentialsRegex = /Usuário ou senha inválidos|bloqueado|sem empresa associada|inexistente/i;
 
@@ -43,12 +57,52 @@ export class DatasulService {
     { id: 'grp-ti', name: 'TI', description: 'Suporte e manutenção' },
   ];
 
-  async authenticate(login: string, password: string, domain?: string) {
+  getAvailableEnvironments(): DatasulEnvironment[] {
+    const raw = process.env.DATASUL_ENVIRONMENTS;
+
+    if (!raw) {
+      return defaultDatasulEnvironments;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as DatasulEnvironment[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch {
+      return defaultDatasulEnvironments;
+    }
+
+    return defaultDatasulEnvironments;
+  }
+
+  private getEnvironment(environmentId?: string): DatasulEnvironment {
+    const environments = this.getAvailableEnvironments();
+    const defaultEnvironmentId = process.env.DATASUL_DEFAULT_ENVIRONMENT ?? 'chile-desenv';
+    const requestedEnvironment = environmentId ?? defaultEnvironmentId;
+
+    return (
+      environments.find((environment) => environment.id === requestedEnvironment) ??
+      environments.find((environment) => environment.id === defaultEnvironmentId) ??
+      environments[0]
+    );
+  }
+
+  private getLegacyLoginUrl(baseUrl: string) {
+    return `${baseUrl.replace(/\/+$/, '')}/totvs-login/ACS?login`;
+  }
+
+  private getRestLoginUrl(baseUrl: string) {
+    return `${baseUrl.replace(/\/+$/, '')}${this.restLoginPath}`;
+  }
+
+  async authenticate(login: string, password: string, domain?: string, environmentId?: string) {
     if (!login || !password) {
       throw new UnauthorizedException('Usuário e senha são obrigatórios.');
     }
 
     const normalizedLogin = login.trim();
+    const selectedEnvironment = this.getEnvironment(environmentId);
 
     if (process.env.NODE_ENV === 'test' || process.env.DATASUL_USE_DEMO === 'true') {
       if (normalizedLogin.toLowerCase() !== 'datasul' || password !== 'portal123') {
@@ -69,6 +123,8 @@ export class DatasulService {
         login: normalizedLogin,
         user,
         groups: this.defaultGroups,
+        environmentId: selectedEnvironment.id,
+        environmentLabel: selectedEnvironment.label,
         createdAt: new Date(),
       });
 
@@ -78,7 +134,7 @@ export class DatasulService {
     try {
       const encodedUser = encodeURIComponent(normalizedLogin);
       const encodedPassword = encodeURIComponent(password);
-      const loginUrlWithPathParams = `${this.restLoginUrl},${encodedUser},${encodedPassword}`;
+      const loginUrlWithPathParams = `${this.getRestLoginUrl(selectedEnvironment.baseUrl)},${encodedUser},${encodedPassword}`;
 
       const response = await fetch(loginUrlWithPathParams, {
         method: 'GET',
@@ -129,6 +185,8 @@ export class DatasulService {
         login: normalizedLogin,
         user,
         groups: this.defaultGroups,
+        environmentId: selectedEnvironment.id,
+        environmentLabel: selectedEnvironment.label,
         createdAt: new Date(),
       });
 
@@ -150,7 +208,7 @@ export class DatasulService {
         j_domain: domain ?? '',
       });
 
-      const response = await fetch(this.loginUrl, {
+      const response = await fetch(this.getLegacyLoginUrl(selectedEnvironment.baseUrl), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -185,6 +243,8 @@ export class DatasulService {
         login: normalizedLogin,
         user,
         groups: this.defaultGroups,
+        environmentId: selectedEnvironment.id,
+        environmentLabel: selectedEnvironment.label,
         createdAt: new Date(),
       });
 
@@ -225,6 +285,27 @@ export class DatasulService {
     }
 
     return this.sessions.get(sessionId)?.groups ?? [];
+  }
+
+  getSessionEnvironment(sessionId?: string) {
+    if (!sessionId) {
+      return null;
+    }
+
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return null;
+    }
+
+    const environment = this.getEnvironment(session.environmentId);
+
+    return {
+      id: environment.id,
+      label: environment.label,
+      country: environment.country,
+      stage: environment.stage,
+      baseUrl: environment.baseUrl,
+    };
   }
 
   clearSession(sessionId?: string) {

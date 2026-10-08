@@ -10,8 +10,15 @@ describe('AuthService', () => {
     service = new AuthService(new DatasulService());
   });
 
+  it('should expose available Datasul environments', () => {
+    const environments = service.getAvailableEnvironments();
+
+    expect(environments.length).toBeGreaterThan(0);
+    expect(environments.some((environment) => environment.id === 'chile-desenv')).toBe(true);
+  });
+
   it('should authenticate a valid user', async () => {
-    const result = await service.login('datasul', 'portal123');
+    const result = await service.login('datasul', 'portal123', 'chile-desenv');
 
     expect(result.success).toBe(true);
     expect(result.user.login).toBe('datasul');

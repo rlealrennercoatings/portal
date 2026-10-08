@@ -17,10 +17,28 @@ html, body {
   color: var(--renner-ink);
 }
 
+html {
+  font-size: 16px;
+}
+
+body {
+  min-height: 100vh;
+}
+
 * {
   box-sizing: border-box;
 }
 
-button, input {
+button, input, select {
   font: inherit;
+}
+
+img {
+  max-width: 100%;
+}
+
+@media (max-width: 520px) {
+  html {
+    font-size: 15px;
+  }
 }

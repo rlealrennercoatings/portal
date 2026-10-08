@@ -53,22 +53,45 @@ cp .env.example .env
 
 Ajuste os valores conforme o ambiente Datasul real.
 
+### Frontend por ambiente
+
+O Angular agora usa configurações específicas para desenvolvimento e produção:
+
+- desenvolvimento: `src/environments/environment.ts`
+- produção: `src/environments/environment.prod.ts`
+
+Os valores de API são carregados a partir do ambiente atual, permitindo alternar facilmente entre `localhost` e o servidor de produção sem alterar código.
+
 ## Execução local
 
-### Backend
+### Iniciar backend e frontend juntos
+
+Na raiz do projeto:
 
 ```bash
-cd backend
-npm install
-npm run start:dev
-```
-
-### Frontend
-
-```bash
-cd frontend
 npm install
 npm run start
+```
+
+Esse comando sobe o backend em `http://localhost:3000` e o frontend em `http://localhost:4200` ao mesmo tempo.
+
+### Iniciar separadamente
+
+```bash
+npm run start:backend
+npm run start:frontend
+```
+
+### Parar os serviços locais
+
+```bash
+npm run stop
+```
+
+### Build de produção
+
+```bash
+npm run build
 ```
 
 ## Documentação

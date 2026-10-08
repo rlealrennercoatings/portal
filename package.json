@@ -1,0 +1,14 @@
+{
+  "name": "portal-renner",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/start.js",
+    "start:backend": "node scripts/start-backend.js",
+    "start:frontend": "node scripts/start-frontend.js",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "stop": "node scripts/stop.js",
+    "deploy:prod": "node scripts/deploy-prod.js",
+    "deploy:git:prod": "bash scripts/deploy-git-prod.sh",
+    "rollback:prod": "bash scripts/rollback-prod.sh"
+  }
+}

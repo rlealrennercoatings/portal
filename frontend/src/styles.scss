@@ -1,0 +1,26 @@
+:root {
+  --renner-red-900: #7b0f1a;
+  --renner-red-700: #a61d2a;
+  --renner-red-600: #c1282d;
+  --renner-red-500: #d62d35;
+  --renner-red-300: #f2d7d9;
+  --renner-ink: #2a1d1e;
+  --renner-surface: #fff7f7;
+  --renner-border: #f0c4c7;
+  --renner-muted: #6d4a4f;
+}
+
+html, body {
+  margin: 0;
+  font-family: "Segoe UI", Roboto, sans-serif;
+  background: linear-gradient(135deg, #fff7f7 0%, #fbe9ea 45%, #f6dfe1 100%);
+  color: var(--renner-ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button, input {
+  font: inherit;
+}

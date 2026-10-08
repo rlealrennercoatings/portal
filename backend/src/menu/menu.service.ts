@@ -103,6 +103,7 @@ export class MenuService {
     `);
 
     this.seedDefaultAreas();
+    this.ensureRequiredDefaults();
   }
 
   close(): void {
@@ -334,6 +335,37 @@ export class MenuService {
       this.createArea({
         ...area,
         applications: area.applications,
+      });
+    });
+  }
+
+  private ensureRequiredDefaults(): void {
+    DEFAULT_AREAS.forEach((defaultArea) => {
+      const existingArea = this.getArea(defaultArea.id);
+      if (!existingArea) {
+        this.createArea({
+          ...defaultArea,
+          applications: defaultArea.applications,
+        });
+        return;
+      }
+
+      defaultArea.applications.forEach((defaultApplication) => {
+        const existingApplication = existingArea.applications.find((application) => application.id === defaultApplication.id);
+        if (!existingApplication) {
+          this.createApplication(defaultArea.id, defaultApplication);
+          return;
+        }
+
+        const mergedGroups = this.normalizeGroups([
+          ...existingApplication.allowedGroups,
+          ...defaultApplication.allowedGroups,
+        ]);
+
+        if (defaultArea.id === 'foundation' && defaultApplication.id === 'menu-admin') {
+          const protectedGroups = this.ensureRequiredGroup(defaultArea.id, defaultApplication.id, mergedGroups);
+          this.updateApplication(defaultArea.id, defaultApplication.id, { allowedGroups: protectedGroups });
+        }
       });
     });
   }

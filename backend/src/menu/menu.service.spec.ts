@@ -19,6 +19,17 @@ describe('MenuService', () => {
     expect(areas.some((area) => area.id === 'tecnologia')).toBe(true);
   });
 
+  it('should repair the database by ensuring Foundation and menu administration exist even when the DB was created before those defaults', () => {
+    const db = (service as any).db;
+    db.prepare('DELETE FROM applications WHERE area_id = ?').run('foundation');
+    db.prepare('DELETE FROM areas WHERE id = ?').run('foundation');
+
+    service['ensureRequiredDefaults']();
+
+    expect(service.getAllAreas().some((area) => area.id === 'foundation')).toBe(true);
+    expect(service.getAllAreas().find((area) => area.id === 'foundation')?.applications.some((application) => application.id === 'menu-admin')).toBe(true);
+  });
+
   it('should allow creating a new dynamic area and application', () => {
     const created = service.createArea({
       id: 'comercial',
